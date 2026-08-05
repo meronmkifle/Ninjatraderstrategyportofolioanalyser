@@ -1,4 +1,4 @@
-# AlgoScope · NinjaTrader Algo Portfolio Optimizer
+# Ninjatraderstrategyportofolioanalyser · NinjaTrader Algo Portfolio Optimizer
 
 > **Free, browser-based portfolio analysis for algorithmic futures traders.**  
 > Upload your NinjaTrader or Tradovate trade exports, compare strategies side-by-side, and find the optimal allocation mix — all without sending your data anywhere.
