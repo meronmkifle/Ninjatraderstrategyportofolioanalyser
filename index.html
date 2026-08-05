@@ -604,18 +604,19 @@ input[type=range]::-webkit-slider-thumb:hover{transform:scale(1.25)}
         </div>
       </div>
     </div>
-    <div class="form-group">
+    <div class="form-group" id="imp-name-group">
       <label class="form-label">Strategy Name</label>
       <input class="form-input" id="imp-name" type="text" placeholder="e.g. ORB ES v2.1">
+      <div style="font-size:10px;color:var(--tx3);margin-top:4px">Only used when importing a single file. Selecting multiple files names each strategy after its filename.</div>
     </div>
     <div class="form-group">
       <label class="form-label">CSV File</label>
       <div class="drop-zone" id="imp-drop" onclick="document.getElementById('imp-file').click()">
         <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--tx3)" stroke-width="1.5" stroke-linecap="round" style="margin:0 auto 10px;display:block"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6M9 12h6M9 15h4"/></svg>
-        <div class="drop-zone-title" id="imp-file-label">Drop CSV or click to browse</div>
-        <div class="drop-zone-sub">NinjaTrader · Tradovate · Auto-detected format</div>
+        <div class="drop-zone-title" id="imp-file-label">Drop CSV(s) or click to browse</div>
+        <div class="drop-zone-sub">NinjaTrader · Tradovate · Auto-detected format · Select multiple files to import them all as separate strategies</div>
       </div>
-      <input type="file" id="imp-file" accept=".csv" style="display:none">
+      <input type="file" id="imp-file" accept=".csv" multiple style="display:none">
     </div>
     <div class="status-bar" id="imp-status" style="display:none"></div>
     <div style="display:flex;gap:10px;margin-top:18px">
@@ -1266,39 +1267,77 @@ window.startRenameStrat=startRenameStrat;
 window.commitRenameStrat=commitRenameStrat;
 
 // ── IMPORT ─────────────────────────────────────────────────────────────────
-function openImport(){document.getElementById('import-modal').style.display='flex';document.getElementById('imp-name').value='';document.getElementById('imp-file-label').textContent='Drop CSV or click to browse';document.getElementById('imp-status').style.display='none';_impFile=null;}
+function openImport(){document.getElementById('import-modal').style.display='flex';document.getElementById('imp-name').value='';document.getElementById('imp-file-label').textContent='Drop CSV(s) or click to browse';document.getElementById('imp-status').style.display='none';_impFiles=[];var ng=document.getElementById('imp-name-group');if(ng)ng.style.display='';}
 function closeImport(){document.getElementById('import-modal').style.display='none';}
 window.openImport=openImport;window.closeImport=closeImport;
-var _impFile=null;
-document.getElementById('imp-file').addEventListener('change',function(e){var f=e.target.files[0];if(!f)return;_impFile=f;document.getElementById('imp-file-label').textContent=f.name;if(!document.getElementById('imp-name').value)document.getElementById('imp-name').value=f.name.replace(/\.csv$/i,'');});
+var _impFiles=[];
+function handleImpFiles(fileList){
+  var files=Array.prototype.filter.call(fileList||[],function(f){return/\.csv$/i.test(f.name);});
+  if(!files.length)return;
+  _impFiles=files;
+  var nameGroup=document.getElementById('imp-name-group');
+  if(files.length===1){
+    document.getElementById('imp-file-label').textContent=files[0].name;
+    if(!document.getElementById('imp-name').value)document.getElementById('imp-name').value=files[0].name.replace(/\.csv$/i,'');
+    if(nameGroup)nameGroup.style.display='';
+  }else{
+    document.getElementById('imp-file-label').textContent=files.length+' files selected: '+files.map(function(f){return f.name;}).join(', ');
+    if(nameGroup)nameGroup.style.display='none';
+  }
+}
+document.getElementById('imp-file').addEventListener('change',function(e){handleImpFiles(e.target.files);});
 var dz=document.getElementById('imp-drop');
 dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
 dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
-dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('drag-over');var f=e.dataTransfer.files[0];if(!f)return;_impFile=f;document.getElementById('imp-file-label').textContent=f.name;if(!document.getElementById('imp-name').value)document.getElementById('imp-name').value=f.name.replace(/\.csv$/i,'');});
+dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('drag-over');handleImpFiles(e.dataTransfer.files);});
 function setStatus(msg,color){var el=document.getElementById('imp-status');el.style.display='block';var map={green:['rgba(0,229,160,.1)','var(--acc)','rgba(0,229,160,.3)'],red:['rgba(255,61,90,.1)','var(--red)','rgba(255,61,90,.3)'],yellow:['rgba(255,202,40,.1)','var(--ylw)','rgba(255,202,40,.3)']};var c=map[color]||map.yellow;el.style.background=c[0];el.style.color=c[1];el.style.border='1px solid '+c[2];el.textContent=msg;}
 function doImport(){
-  var name=document.getElementById('imp-name').value.trim()||'Strategy '+(S.strategies.length+1);
-  if(!_impFile){setStatus('Please select a CSV file first.','yellow');return;}
-  setStatus('Parsing…','yellow');
-  var reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      var trades=parseCSV(e.target.result);
-      var valid=trades.filter(function(t){var ms=toMs(t.entry_time);return ms>0&&!isNaN(t.pnl)&&isFinite(t.pnl);});
-      if(!valid.length){setStatus('No valid trades found. Check CSV format (NinjaTrader or Tradovate).','red');return;}
-      var color=COLORS[S.strategies.length%COLORS.length];
-      var id=uid();
-      S.strategies.push({id:id,name:name,color:color,trades:valid});
-      rebalanceEqual();
-      saveToStorage();
-      showStorageToast('✓ "'+name+'" saved — will persist on refresh');
-      renderSidebar();
-      renderPage(S.currentPage);
-      setStatus('✓ '+valid.length+' trades imported for "'+name+'"','green');
-      setTimeout(closeImport,900);
-    }catch(err){setStatus('Parse error: '+err.message,'red');}
-  };
-  reader.readAsText(_impFile);
+  if(!_impFiles||!_impFiles.length){setStatus('Please select a CSV file first.','yellow');return;}
+  var singleName=document.getElementById('imp-name').value.trim();
+  var files=_impFiles;
+  setStatus('Parsing '+files.length+' file'+(files.length>1?'s':'')+'…','yellow');
+  var results=[],errors=[],remaining=files.length;
+  files.forEach(function(file){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      try{
+        var trades=parseCSV(e.target.result);
+        var valid=trades.filter(function(t){var ms=toMs(t.entry_time);return ms>0&&!isNaN(t.pnl)&&isFinite(t.pnl);});
+        if(!valid.length){errors.push(file.name+': no valid trades found');}
+        else{
+          var name=(files.length===1&&singleName)?singleName:file.name.replace(/\.csv$/i,'');
+          results.push({name:name,trades:valid});
+        }
+      }catch(err){errors.push(file.name+': '+err.message);}
+      remaining--;
+      if(remaining===0)finishImport(results,errors);
+    };
+    reader.onerror=function(){errors.push(file.name+': could not read file');remaining--;if(remaining===0)finishImport(results,errors);};
+    reader.readAsText(file);
+  });
+}
+function finishImport(results,errors){
+  results.forEach(function(r){
+    var color=COLORS[S.strategies.length%COLORS.length];
+    var id=uid();
+    S.strategies.push({id:id,name:r.name,color:color,trades:r.trades});
+  });
+  if(results.length){
+    rebalanceEqual();
+    saveToStorage();
+    showStorageToast('✓ '+results.length+' strateg'+(results.length===1?'y':'ies')+' saved — will persist on refresh');
+    renderSidebar();
+    renderPage(S.currentPage);
+  }
+  if(errors.length&&results.length){
+    setStatus('✓ Imported '+results.length+' · Failed '+errors.length+': '+errors.join(' | '),'yellow');
+    setTimeout(closeImport,2200);
+  }else if(errors.length){
+    setStatus('Import failed — '+errors.join(' | '),'red');
+  }else{
+    setStatus('✓ '+results.map(function(r){return r.trades.length+' trades for "'+r.name+'"';}).join(' · '),'green');
+    setTimeout(closeImport,900);
+  }
 }
 window.doImport=doImport;
 function rebalanceEqual(){var n=S.strategies.length;if(!n)return;var each=Math.floor(100/n);var rem=100-each*n;S.strategies.forEach(function(s,i){S.allocations[s.id]=each+(i===0?rem:0);});}
