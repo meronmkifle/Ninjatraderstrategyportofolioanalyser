@@ -3438,21 +3438,26 @@ function renderHeatmap(){
   var mKeys=Object.keys(monthMap).sort();
   var maxMPnl=Math.max.apply(null,mKeys.map(function(k){return Math.abs(monthMap[k].pnl);})||[1]);
   h+='<div style="background:var(--s1);border:1px solid var(--b1);border-radius:12px;padding:20px 22px">';
-  h+='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:2px;margin-bottom:16px">Monthly P&amp;L Summary</div>';
-  h+='<div style="display:flex;align-items:flex-end;gap:6px;height:100px">';
+  h+='<div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px">';
+  h+='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--tx3);text-transform:uppercase;letter-spacing:2px">Monthly P&amp;L Summary</div>';
+  h+='<div style="font-family:\'Space Mono\',monospace;font-size:9px;color:var(--tx3)">'+mKeys.length+' month'+(mKeys.length===1?'':'s')+' · scroll for full history &#8594;</div>';
+  h+='</div>';
+  h+='<div style="overflow-x:auto;overflow-y:hidden;padding-bottom:6px">';
+  h+='<div style="display:flex;align-items:flex-end;gap:6px;height:100px;width:max-content;min-width:100%">';
   mKeys.forEach(function(mk){
     var mv=monthMap[mk];
     var pct=maxMPnl>0?Math.abs(mv.pnl)/maxMPnl*100:4;
     var col=mv.pnl>=0?'#00e5a0':'#ff3d5a';
     var lbl=mNames[parseInt(mk.slice(5,7))-1].slice(0,3)+' '+mk.slice(2,4);
     var valStr=Math.abs(mv.pnl)>=1000?(mv.pnl>=0?'+':'')+Math.round(mv.pnl/100)/10+'k':(mv.pnl>=0?'+':'')+Math.round(mv.pnl);
-    h+='<div style="flex:1;min-width:36px;display:flex;flex-direction:column;align-items:center;gap:3px" title="'+mk+': '+f$(mv.pnl)+'">';
+    var isCur=(mk===monthKey);
+    h+='<div onclick="hmJumpToMonth(\''+mk+'\')" style="flex:0 0 auto;width:36px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;'+(isCur?'outline:1px solid var(--acc);outline-offset:2px;border-radius:4px':'')+'" title="'+mk+': '+f$(mv.pnl)+' — click to view this month">';
     h+='<div style="font-family:\'Space Mono\',monospace;font-size:8px;color:'+col+';font-weight:700">'+valStr+'</div>';
     h+='<div style="width:100%;background:'+col+';border-radius:4px 4px 0 0;height:'+Math.max(pct,4)+'%;opacity:.85;transition:height .4s"></div>';
     h+='<div style="font-family:\'Space Mono\',monospace;font-size:7px;color:var(--tx3);white-space:nowrap">'+lbl+'</div>';
     h+='</div>';
   });
-  h+='</div></div>';
+  h+='</div></div></div>';
 
   // ── Floating tooltip ───────────────────────────────────────────────────
   h+='<div id="hm-tooltip" style="position:fixed;pointer-events:none;z-index:999;display:none;background:var(--tip-bg);border:1px solid var(--tip-border);border-radius:10px;padding:12px 14px;box-shadow:0 8px 32px rgba(0,0,0,.25);min-width:160px"></div>';
@@ -3478,6 +3483,12 @@ function renderHeatmap(){
   window.hmLatestMonth=function(){
     S._hmMonth=null;
     renderHeatmap();
+  };
+  window.hmJumpToMonth=function(mk){
+    S._hmMonth=mk;
+    renderHeatmap();
+    var wrap=document.getElementById('hm-calendar-wrap');
+    if(wrap)wrap.scrollIntoView({behavior:'smooth',block:'start'});
   };
   window.hmShowTip=function(cell){
     var dt=cell.getAttribute('data-dt');
